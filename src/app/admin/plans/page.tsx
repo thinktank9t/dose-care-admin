@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 import { PlanForm } from "@/app/admin/plans/PlanForm";
 import { Forbidden, MissingServiceKey } from "@/components/Forbidden";
+import { NavLoader } from "@/components/NavLoader";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/StatusPill";
 import { Empty, TableCard, Td, Th, Tr } from "@/components/Table";
@@ -59,6 +60,10 @@ export default async function PlansPage({
           // dropping `?edit=` is what puts it back in add mode.
           <Link href={`${BASE}#plan-form`} className="btn btn-secondary btn-sm">
             Add a plan
+            {/* Dropping `?edit=` is still a server roundtrip on a dynamic
+                route, and it changes no route segment — so without this the
+                click is silent. */}
+            <NavLoader />
           </Link>
         }
       />
@@ -116,6 +121,7 @@ export default async function PlansPage({
                   data-testid="plan-edit-link"
                 >
                   Edit
+                  <NavLoader />
                 </Link>
               </Td>
             </Tr>

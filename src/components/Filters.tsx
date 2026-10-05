@@ -60,7 +60,7 @@ export function FilterPill({
       {/* Reports the server roundtrip this chip costs. A chip changes only
           `?status=`, not the route segment, so the segment's `loading.tsx`
           never re-suspends and the click would otherwise be silent — see the
-          long note on NavLoader. It is `position: fixed`, so it is not a flex
+          long note on NavLoader. It portals to the body, so it is not a flex
           item here and adds neither width nor a `gap`. */}
       <NavLoader />
     </Link>

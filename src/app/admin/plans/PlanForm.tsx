@@ -14,6 +14,7 @@ import {
   isReservedPeriod,
   isWholeTaka,
 } from "@/app/admin/plans/rules";
+import { NavLoader } from "@/components/NavLoader";
 import { Spinner } from "@/components/Spinner";
 import {
   DURATION_UNITS,
@@ -135,6 +136,7 @@ export function PlanForm({
             data-testid="plan-form-cancel"
           >
             Cancel and add a new plan instead
+            <NavLoader />
           </Link>
         ) : null}
       </div>
@@ -368,6 +370,7 @@ function PlanFields({
                     className="text-accent-ink underline underline-offset-2"
                   >
                     Edit it instead
+                    <NavLoader />
                   </Link>
                   .
                 </p>
