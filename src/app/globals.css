@@ -395,6 +395,24 @@ summary:focus-visible {
   animation: dc-spin 0.8s linear infinite;
 }
 
+@keyframes dc-fade-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* For a loader that must not strobe.
+   Starts transparent and fades in only after 120ms, so a navigation that
+   finishes quickly renders the element and never shows it. The delay is the
+   whole point: a filter chip on a warm connection commits in well under that,
+   and a full-screen panel flashing on every click reads as a glitch rather
+   than as progress. `forwards` holds the final opacity, because the element
+   is unmounted when the work finishes rather than faded out. */
+@utility fade-in-delayed {
+  opacity: 0;
+  animation: dc-fade-in 160ms ease 120ms forwards;
+}
+
 /* --- Motion -------------------------------------------------------------
    Transitions are 120ms ease on background-color, opacity and transform
    only. Under reduced-motion everything stops except the spinner, which is
@@ -411,5 +429,11 @@ summary:focus-visible {
 
   .spin {
     animation-duration: 2s;
+  }
+
+  /* The delay is timing, not motion, so it stays — a reduced-motion operator
+     should still be spared the flash. Only the fade itself is dropped. */
+  .fade-in-delayed {
+    animation-duration: 1ms;
   }
 }
