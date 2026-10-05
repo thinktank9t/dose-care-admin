@@ -176,3 +176,39 @@ export async function countPaymentsAwaitingReview(): Promise<number> {
   if (error) throw new Error(`countPaymentsAwaitingReview: ${error.message}`);
   return count ?? 0;
 }
+
+/**
+ * Open claims bucketed by the amount they quote.
+ *
+ * This is what makes a price change on the plans page a visible decision
+ * rather than a silent one. `resolve_pending_claim()` approves a claim only
+ * when the amount paid is the price of an *active* plan, so editing ৳1338 to
+ * ৳1400 — or switching that plan off — turns every open claim still quoting
+ * ৳1338 into a NOT_A_PLAN_PRICE rejection. Those people have already sent the
+ * money. The plans form reads this to say how many of them there are before
+ * the write, not after.
+ *
+ * Keyed by `String(Number(amount))` because `numeric` arrives as a string
+ * from PostgREST and "1338.00" and "1338" are the same price — a map keyed on
+ * the raw text would miss every lookup.
+ */
+export async function countOpenClaimsByAmount(): Promise<Record<string, number>> {
+  const db = adminDb();
+
+  const { data, error } = await db
+    .from("pending_claims")
+    .select("amount")
+    .is("resolved_at", null);
+
+  if (error) throw new Error(`countOpenClaimsByAmount: ${error.message}`);
+
+  const out: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const raw = (row as { amount: number | string | null }).amount;
+    if (raw === null) continue;
+    const key = String(Number(raw));
+    if (key === "NaN") continue;
+    out[key] = (out[key] ?? 0) + 1;
+  }
+  return out;
+}

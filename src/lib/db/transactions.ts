@@ -1,5 +1,6 @@
 import "server-only";
 
+import { PG, describe } from "@/lib/db/error";
 import { adminDb } from "@/lib/supabase/admin";
 import type { TransactionRow } from "@/lib/db/types";
 
@@ -56,18 +57,6 @@ export type RecordTransactionResult =
   | { ok: false; reason: "duplicate" }
   | { ok: false; reason: "failed"; message: string };
 
-/** PostgREST returns the code separately from the prose; both matter. */
-function describe(error: {
-  code?: string | null;
-  message: string;
-  details?: string | null;
-  hint?: string | null;
-}): string {
-  return [error.code ? `[${error.code}]` : null, error.message, error.details, error.hint]
-    .filter(Boolean)
-    .join(" — ");
-}
-
 /**
  * Insert one transaction.
  *
@@ -75,8 +64,8 @@ function describe(error: {
  * stored row is either a real forwarded SMS or an earlier hand entry, and
  * overwriting it with freshly typed text would destroy the better record of
  * the two. The pre-check in the action is for the message an operator reads;
- * this code still has to handle 23505, because the payment app can win the
- * race between that check and this insert.
+ * this code still has to handle the unique violation, because the payment app
+ * can win the race between that check and this insert.
  */
 export async function recordTransaction(
   input: RecordTransactionInput,
@@ -100,8 +89,10 @@ export async function recordTransaction(
     .single();
 
   if (error) {
-    // 23505 is unique_violation on the trx_id key.
-    if (error.code === "23505") return { ok: false, reason: "duplicate" };
+    // Unique violation on the trx_id key.
+    if (error.code === PG.UNIQUE_VIOLATION) {
+      return { ok: false, reason: "duplicate" };
+    }
     return { ok: false, reason: "failed", message: describe(error) };
   }
 

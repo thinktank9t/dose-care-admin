@@ -4,9 +4,9 @@ An internal operator dashboard for Dose Care. Two or three people use it to
 answer three questions: **who has paid and is waiting to be let in**, **who is
 on premium right now**, and **what the plans cost**.
 
-It is a **read-only** view of the production database. Nothing in this app
-grants premium, edits a user or resolves a payment — see
-[What it writes](#what-it-writes) for the single exception.
+It is **almost** a read-only view of the production database: it does not
+grant premium, edit a user or resolve a payment. The three things it does
+write are listed under [What it writes](#what-it-writes).
 
 **Stack:** Next.js 16 (App Router, Turbopack) · React 19 · Tailwind CSS v4 ·
 Supabase (Postgres + Auth) · TypeScript.
@@ -117,7 +117,7 @@ account.
 | `/admin/payments` | **The work queue.** Pending payments, matched against received bKash transactions |
 | `/admin/users` | All users, filterable and searchable, 25 per page |
 | `/admin/users/[id]` | One user's full record |
-| `/admin/plans` | What the client offers and charges |
+| `/admin/plans` | What the client offers and charges — **and the one place they are edited** |
 | `/sign-in` | Email + password |
 | `/auth/callback` | Where an emailed link or OAuth redirect lands |
 
@@ -144,7 +144,7 @@ writing service uses.
 | Table | Used for |
 |---|---|
 | `users` | Users list and detail, all overview tiles |
-| `plans` | Plans page, overview plan strip |
+| `plans` | Plans page, overview plan strip, and the prices the payments form warns against |
 | `pending_claims` | The payments queue |
 | `transactions` | Received bKash payments, matched to claims by `trx_id` |
 
@@ -157,13 +157,54 @@ beside it in `src/lib/db/users.ts` so the two cannot drift.
 
 ### What it writes
 
-One thing, and only on sign-in: `/auth/callback` stamps `users.google_id` on
-the row matching the operator's verified Google email, if it is not already
-set. It is best-effort and swallowed on failure — a failed write must not turn
-a successful sign-in into a failure. Nothing else in this app writes anything.
+Three things. Nothing else in this app writes anything.
 
-Resolving a payment and granting premium happen elsewhere. If you add them
-here, they belong in a server action behind `assertAdmin()`.
+| What | Where | Guard |
+|---|---|---|
+| `users.google_id`, on sign-in only | `/auth/callback` | The verified Google email on the session |
+| A row in `transactions` — a bKash payment the payment app never forwarded | `/admin/payments` → *Record a payment by hand* | `assertAdmin()` |
+| A row in `plans` — added or edited | `/admin/plans` → *Add a plan* / *Edit* | `assertAdmin()` |
+
+The `google_id` stamp is best-effort and swallowed on failure: a failed write
+must not turn a successful sign-in into a failure. The other two are server
+actions, and each one re-runs every check its form makes — a Server Action is
+a POST endpoint, and rendering a form behind `requireAdmin()` gates the
+*page*, not the action.
+
+**Resolving a payment and granting premium still happen elsewhere.** Nothing
+here settles a claim. If you add that, it belongs in a server action behind
+`assertAdmin()` like the two above.
+
+### Editing plans
+
+A row in `plans` is not a display record — it is the rule a claim is settled
+against. `resolve_pending_claim()` approves a payment only when the amount
+paid is the price of an *active* plan, and grants premium for that plan's
+`duration`. Three consequences, all of them enforced in the code:
+
+- **A period is never renamed.** `period` is the primary key and `users`
+  carries it as plain text in `plan_period` with no foreign key, so a rename
+  would succeed and orphan every subscriber on the plan. The edit form shows
+  the period as fixed text, and `updatePlan` takes it only as a selector.
+- **Nothing deletes.** Same problem, plus it would destroy the record of what
+  subscribers were charged. Retiring a plan is `is_active: false`, which stops
+  new claims being approved at that price and leaves current premium alone.
+- **Prices are whole taka.** `amount` is `numeric` and Postgres would take
+  ৳332.50, but `formatBdt` renders no decimals — the dashboard would show
+  ৳333 while a claim was being compared against ৳332.50.
+
+Because a price is a settlement rule, the form states what the write does to
+claims that are **already open** before the button: how many people have
+already sent money at the price being changed, what retiring a plan does and
+does not do, and whether two active plans would end up sharing one price.
+Those counts come from `countOpenClaimsByAmount()`.
+
+`duration` is a Postgres `interval`, which does not round-trip as text —
+Postgres stores a normalised month/day triple and prints it back in its own
+abbreviations, so `"1 month"` is read back as `"1 mon"` and `"12 months"` as
+`"1 year"`. `src/lib/duration.ts` owns both directions, which is why parsing
+and rendering live in one file instead of being split between the form and
+`format.ts`.
 
 ---
 
